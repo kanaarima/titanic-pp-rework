@@ -1,8 +1,14 @@
+from rosu_pp_py import Calculator as rosu_calculator
+from rosu_pp_py import Beatmap as rosu_beatmap
+
 from titanic import Score, RankingEntry
 from typing import *
+
+import requests
 import shutil
 import store
 import json
+import time
 import os
 
 def recalc():
@@ -12,7 +18,8 @@ def recalc():
     
     shutil.rmtree("output", ignore_errors=True)
     os.makedirs("output/users/", exist_ok=True)
-
+    os.makedirs("beatmaps/", exist_ok=True)
+    
     def handle_recalc(score: Score) -> float:
         match score['mode']:
             case 0:
@@ -80,7 +87,33 @@ def recalc():
             json.dump(new_leaderboard, f, indent=4)
 
 def recalc_osu(score: Score):
-    return score['pp']
+    if not (beatmap := get_map(score['beatmap']['id'])):
+        print(f"Can't recalc score {score['id']}!")
+        return score['pp']
+    if score['mods'] & 128: # RX
+        return score['pp']
+    else:
+        rounded = get_rounded_values(beatmap)
+        map = rosu_beatmap(path = beatmap)
+        for k, v in rounded.items():
+            match k:
+                case "ar":
+                    map.set_ar(v)
+                case "od":
+                    map.set_od(v)
+                case "hp":
+                    map.set_hp(v)
+                case "cs":
+                    map.set_cs(v)
+        calc = rosu_calculator(mods=score['mods'], mode=score['mode'])
+        calc.set_combo(score['max_combo'])
+        calc.set_n300(score['n300'])
+        calc.set_n100(score['n100'])
+        calc.set_n50(score['n50'])
+        calc.set_n_misses(score['nMiss'])
+        calc.set_n_geki(score['nGeki'])
+        calc.set_n_katu(score['nKatu'])
+        return calc.performance(map).pp
 
 def recalc_taiko(score: Score):
     return score['pp']
@@ -90,3 +123,32 @@ def recalc_ctb(score: Score):
 
 def recalc_mania(score: Score):
     return score['pp']
+
+def get_rounded_values(beatmap_path):
+    res = {}
+    with open(beatmap_path) as f:
+        for line in f.readlines():
+            line = line.strip().split(":")
+            if len(line) != 2:
+                continue
+            match line[0]:
+                case "OverallDifficulty":
+                    res['od'] = round(float(line[1]))
+                case "CircleSize":
+                    res['cs'] = round(float(line[1]))
+                case "HPDrainRate":
+                    res['hp'] = round(float(line[1]))
+                case "ApproachRate":
+                    res['ar'] = round(float(line[1]))
+    return res
+
+def get_map(beatmap_id) -> str | None:
+    if os.path.exists(f"beatmaps/{beatmap_id}.osu"):
+        return f"beatmaps/{beatmap_id}.osu"
+    req = requests.get(f"https://old.ppy.sh/osu/{beatmap_id}")
+    time.sleep(0.5)
+    if not req.ok:
+        return
+    with open(f"beatmaps/{beatmap_id}.osu", "wb") as f:
+        f.write(req.content)
+    return f"beatmaps/{beatmap_id}.osu"
