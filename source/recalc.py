@@ -1,3 +1,6 @@
+from titanic_pp_py import Calculator as titanic_calculator
+from titanic_pp_py import Beatmap as titanic_beatmap
+
 from rosu_pp_py import Calculator as rosu_calculator
 from rosu_pp_py import Beatmap as rosu_beatmap
 
@@ -91,7 +94,27 @@ def recalc_osu(score: Score):
         print(f"Can't recalc score {score['id']}!")
         return score['pp']
     if score['mods'] & 128: # RX
-        return score['pp']
+        rounded = get_rounded_values(beatmap)
+        map = titanic_beatmap(path = beatmap)
+        for k, v in rounded.items():
+            match k:
+                case "ar":
+                    map.set_ar(v)
+                case "od":
+                    map.set_od(v)
+                case "hp":
+                    map.set_hp(v)
+                case "cs":
+                    map.set_cs(v)
+        calc = titanic_calculator(mods=score['mods'], mode=score['mode'])
+        calc.set_combo(score['max_combo'])
+        calc.set_n300(score['n300'])
+        calc.set_n100(score['n100'])
+        calc.set_n50(score['n50'])
+        calc.set_n_misses(score['nMiss'])
+        calc.set_n_geki(score['nGeki'])
+        calc.set_n_katu(score['nKatu'])
+        return calc.performance(map).pp
     else:
         rounded = get_rounded_values(beatmap)
         map = rosu_beatmap(path = beatmap)
